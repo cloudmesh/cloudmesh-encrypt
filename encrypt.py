@@ -205,9 +205,9 @@ class KeyHandler:
         self.pub = pub
         self.pem = pem
 
-    def new_rsa_key(self, byte_size=2048, ask_password=True):
+    def new_rsa_key(self, byte_size=2048):
         """
-        Generates a new RSA private key and serializes it
+        Generates a new RSA private key 
         @param: int: size of key in bytes
         @param: bol: indicates if app must prompt for password
         return: serialized bytes of private the RSA key
@@ -218,40 +218,31 @@ class KeyHandler:
             backend=default_backend()
         )
 
-        # Calculate public key
-        self.pub = self.priv.public_key()
+        return self.priv
 
-        # Password management
-        pwd = None
-        if ask_password == False:  # Explicitly ensure password wasn't desired
-            pwd = None
-        else:  # All other cases will request password
-            pwd = self.requestPass("Password for the new key:")
-
-        # Serialize the key
-        return self.serialize_key(key_type="PRIV", password=pwd)
-
-    def get_pub_key_bytes(self, encoding="PEM", format="SubjectInfo"):
-        if self.pub is None:
-            if self.priv is None:
-                Console.error("Key data is empty")
-            else:
-                self.pub = self.priv.public_key()
-        else:
-            return self.serialize_key(key=self.pub, key_type="PUB",
-                                      encoding=encoding, format=format)
-
-    def serialize_key(self, debug=False, key=None, key_type=None,
-                      encoding="PEM",
-                      format="PKCS8", password=None):
+    def get_pub_key(self, priv = None):
         """
-        @param: bool:       cloudmesh debug flag
-        @param: key_object: pyca key object
-        @param: str:        the type of key file [PRIV, PUB]
-        @param: str:        the type of encoding [PEM, SSH]
-        @param: str:        private [PKCS8, OpenSSL], Public [SubjectInfo, SSH]
-        @param: str:        password for key (Private keys only)
-        return:             serialized key bytes
+        Given a Pyca private key instance return a Pyca public key instance
+        @param priv: the PYCA private key
+        return: the pyca RsaPublicKey
+        """
+        if priv == None:
+            Console.error( "No key was given" )
+        elif isinstance(priv, rsa.RSAPrivateKey):
+            return priv.public_key()
+        else:
+            raise UnsupportedAlgorithm
+
+    def serialize_key(self, debug=False, key=None, key_type="PRIV",
+                      encoding="PEM", format="PKCS8", ask_pass=True):
+        """
+        @param: debug:      cloudmesh debug flag
+        @param: key:        pyca key object
+        @param: key_type:   the type of key file [PRIV, PUB]
+        @param: encoding:   the type of encoding [PEM, SSH]
+        @param: format:     private [PKCS8, OpenSSL], Public [SubjectInfo, SSH]
+        @param: ask_pass:   Indicates if the key should have a password (True,False)
+        return:             serialized key bytes of the key
         """
         # TODO: add try-catching
         # Ensure the key is initialized
@@ -307,11 +298,15 @@ class KeyHandler:
         # This also assigns the password if given
         enc_alg = None
         if key_type == "PRIV":
-            if password is None:
+            if ask_pass == False:
                 enc_alg = serialization.NoEncryption()
             else:
-                pwd = str.encode(password)
-                enc_alg = serialization.BestAvailableEncryption(pwd)
+                pwd = self.requestPass("Password for the new key:")
+                if pwd == "":
+                    enc_alg = serialization.NoEncryption()
+                else:
+                    pwd = str.encode(password)
+                    enc_alg = serialization.BestAvailableEncryption(pwd)
 
         # Serialize key
         sk = None
