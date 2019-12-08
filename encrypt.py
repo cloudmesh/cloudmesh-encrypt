@@ -7,7 +7,7 @@ from cloudmesh.common.Shell import Shell
 from cloudmesh.common.console import Console
 from cloudmesh.common.debug import VERBOSE
 from cloudmesh.common.dotdict import dotdict
-from cloudmesh.common.util import path_expand, readfile
+from cloudmesh.common.util import path_expand, readfile, writefd, yn_choice
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
@@ -290,7 +290,7 @@ class KeyHandler:
         if encoding == "PEM":
             encode = serialization.Encoding.PEM
         elif encoding == "SSH":
-            encod = serialization.Encoding.OpenSSH
+            encode = serialization.Encoding.OpenSSH
         else:
             Console.error("Unsupported key encoding")
 
@@ -316,6 +316,36 @@ class KeyHandler:
             sk = key.private_bytes(encoding=encode, format=key_format,
                                    encryption_algorithm=enc_alg)
         return sk
+
+    def write_key(self, key = None, path = None, mode = "wb"):
+        """
+        Writes the key to the path, creating directories as needed"
+        @param key:     The data being written yca key instance
+        @param path:    full path including file name
+        """
+        # Check if the key is empty
+        if key == None:
+            Console.error("Key is empty")
+            return 
+
+        if path == None:
+            Console.error("Path is empty")
+
+        # Create directories as needed for the key
+        dirs = os.path.dirname(path)
+        if not os.path.exists(dirs):
+            Shell.mkdir(dirs)
+
+        # Check if file exists at locations
+        if os.path.exists(path):
+            Console.info( f"{path} already exists" )
+            ovwr_r = yn_choice( message=f"overwrite {path}?", default="N")
+            if not ovwr_r:
+                Console.info( f"Not overwriting {path}. Quitting" )
+                return
+
+        # Write the file
+        writefd(filename = path, content = key, mode = mode)
 
     def load_key(self, path="", key_type="PUB", encoding="SSH", ask_pass=True):
         """
