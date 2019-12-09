@@ -136,6 +136,119 @@ class CmsEncryptor:
 
         return key, nonce, ct
 
+    def encrypt_file(self, infile=None, outfile=None, enc_aes_key=True, inkey=None):
+        """
+        Encrypts the file located at filepath using AES-GCM, and encrypt the
+        AES key with RSA if indicated. It is the responsibility of the caller 
+        to handle the returned key and nonce. 
+
+        @param infile:      Full path to the file that will be encrypted
+        @param outfile:     Full path to the desired output location
+        @param enc_aes_key: Indicate if AES key should be encrypted with pubkey
+        @param inkey:       Full path to the PEM encoded public key 
+        @return:
+            - bytes: AES-GCM key
+            - bytes: nonce (one time random data)
+        """
+
+        # Check if filepath exists
+        if not os.path.exists(infile):
+            Console.error( f"{infile} does not exists" )
+            return
+
+        # Check if the key exists
+        if enc_aes_key == True and not os.path.exists(inkey):
+            Console.error( f"{inkey} does not exists" )
+            return
+
+        # Check if filepath is directory
+        if os.path.isdir(infile):
+            Console.error( f"{infile} is a directory" )
+            return
+
+        # Assign the outfile name if needed
+        if outfile == None:
+            outfile = os.path.basename(infile) + ".enc"
+
+        # Read the file contents
+        contents = readfile(infile)
+        contents = contents.encode()
+
+        # Encrypt the file using Symmetric AES-GCM encryption
+        k, n, ct = self.encrypt_aesgcm(data = contents, aad = None)
+
+        # Encrypt the key if desired
+        if enc_aes_key:
+            kh = KeyHandler()
+            u = kh.load_key(path=inkey, key_type="PUB", 
+                            encoding="PEM", ask_pass=False)
+            k = self.encrypt_rsa(pub = u, pt = k)
+
+        # Encode the data as integers
+        cipher = int.from_bytes(ct, 'big')
+
+        # Write outfile and remove infile
+        writefd(filename = outfile, content = str(cipher) )
+        Shell.rm(infile)
+
+        return k, n
+
+    def decrypt_file(self, infile = None, aes_key = None, nonce = None, 
+                outfile = None, dec_aes_key = True, inkey = None, has_pass = True):
+        """
+        Decrypts the file located at the infile with AES-GCM using the passed
+        in bytes of the key and nonce that was generated during encryption. 
+        The AES key will be decrypted using RSA if indicated. 
+        Note: This is untested with large data files
+
+        @param infile:      Full path to the file that will be decrypted
+        @param aes_key:     Bytes of the AES key generated at encryption
+        @param nonce:       Bytes of the nonce generated at encryption
+        @param outfile:     Full path to the desired output location
+        @param dec_aes_key: Indicate if AES key should be decrypted with pubkey
+        @param inkey:       Full path to the PEM encoded public key 
+        @param has_pass:    Indicates if the private key is password protected
+        """
+        #TODO: Test with large data files (10GB+)
+
+        # Check if filepath exists
+        if not os.path.exists(infile):
+            Console.error( f"{infile} does not exists" )
+            return
+
+        # Check if the key exists
+        if dec_aes_key == True and not os.path.exists(inkey):
+            Console.error( f"{inkey} does not exists" )
+            return
+
+        # Check if filepath is directory
+        if os.path.isdir(infile):
+            Console.error( f"{infile} is a directory" )
+            return
+
+        # Assign the outfile name if needed
+        if outfile == None:
+            name = os.path.basename(infile)
+            if name[:-4] == '.enc':
+                outfile = infile[:-4]
+            else:
+                outfile = infile
+
+        # Decrypt AES key if indicated
+        if dec_aes_key:
+            kh = KeyHandler()
+            r = kh.load_key(path=inkey, key_type="PRIV", 
+                            encoding = "PEM", ask_pass = has_pass)
+            aes_key = self.decrypt_rsa(priv = r, ct = aes_key)
+
+        # Read file and calculate bytes
+        ct = int(readfile(filename = infile))
+        b_ct = ct.to_bytes((ct.bit_length() + 7) // 8, 'big')
+
+        # Decrypt ciphertext
+        pt = self.decrypt_aesgcm(key = aes_key, nonce = nonce, aad=None, ct = b_ct)
+        writefd(filename = outfile, content = pt.decode() )
+        Shell.rm(infile)
 
 class CmsHasher:
     def __init__(self, data=None, data_type=str):
