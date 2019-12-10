@@ -99,8 +99,10 @@ class CmsEncryptor:
     def decrypt_rsa(self, priv=None, ct=None, padding_scheme="OAEP"):
         if priv is None:
             Console.error("empty key arugment")
+            sys.exit()
         if ct is None:
             Console.error("attempted to decrypt empty data")
+            sys.exit()
         pad = None
         if padding_scheme == "OAEP":
             pad = padding.OAEP(
@@ -111,6 +113,7 @@ class CmsEncryptor:
             pad = padding.PKCS1v15
         else:
             Console.error("Unsupported padding scheme")
+            sys.exit()
 
         # return priv.decrypt( ct, pad ).decode()
         return priv.decrypt(ct, pad)
@@ -131,6 +134,7 @@ class CmsEncryptor:
         """
         if data is None:
             Console.error("Attempted to encrypt empty data")
+            sys.exit()
 
         # ALWAYS generate a new nonce. 
         # ALL security is lost if same nonce and key are used with diff text 
@@ -159,17 +163,17 @@ class CmsEncryptor:
         # Check if filepath exists
         if not os.path.exists(infile):
             Console.error( f"{infile} does not exists" )
-            return
+            sys.exit()
 
         # Check if the key exists
         if enc_aes_key == True and not os.path.exists(inkey):
             Console.error( f"{inkey} does not exists" )
-            return
+            sys.exit()
 
         # Check if filepath is directory
         if os.path.isdir(infile):
             Console.error( f"{infile} is a directory" )
-            return
+            sys.exit()
 
         # Assign the outfile name if needed
         if outfile == None:
@@ -219,16 +223,19 @@ class CmsEncryptor:
         # Check if filepath exists
         if not os.path.exists(infile):
             Console.error( f"{infile} does not exists" )
+            sys.exit()
             return
 
         # Check if the key exists
         if dec_aes_key == True and not os.path.exists(inkey):
             Console.error( f"{inkey} does not exists" )
+            sys.exit()
             return
 
         # Check if filepath is directory
         if os.path.isdir(infile):
             Console.error( f"{infile} is a directory" )
+            sys.exit()
             return
 
         # Assign the outfile name if needed
@@ -266,6 +273,7 @@ class CmsHasher:
                 self.data = data
             else:
                 Console.error("data_type not supported")
+                sys.exit()
 
     def hash_data(self, data=None, hash_alg="SHA256"
                   , encoding=False, clean=False):
@@ -280,6 +288,7 @@ class CmsHasher:
             digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
         else:
             Console.error("Unsupported Hashing algorithm")
+            sys.exit()
 
         if type(data) is str:
             data = data.encode()
@@ -293,6 +302,7 @@ class CmsHasher:
             hashed = b64encode(hashed).decode()
         else:
             Console.error("Unknown encoding requested")
+            sys.exit()
 
         # Clean data for system purposes if requested
         if clean:
@@ -368,6 +378,7 @@ class KeyHandler:
             if key_type == "PRIV":
                 if self.priv is None:
                     Console.error("No key given")
+                    sys.exit()
                 else:
                     key = self.priv
             elif key_type == "PUB":
@@ -402,6 +413,7 @@ class KeyHandler:
                 key_format = key_format.OpenSSH
             else:
                 Console.error("Unsupported public key format")
+                sys.exit()
 
         # Discern encoding
         encode = None
@@ -411,6 +423,7 @@ class KeyHandler:
             encode = serialization.Encoding.OpenSSH
         else:
             Console.error("Unsupported key encoding")
+            sys.exit()
 
         # Discern encryption algorithm (Private keys only)
         # This also assigns the password if given
@@ -502,7 +515,6 @@ class KeyHandler:
         else:
             Console.error("Unsupported encoding and key-type pairing")
             sys.exit()
-            sys.exit("Unsupported encoding and key-type pairing")
 
         # Discern password
         password = None
