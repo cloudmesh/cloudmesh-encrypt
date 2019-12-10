@@ -1,4 +1,5 @@
 import os
+import sys
 import platform
 from base64 import b64encode
 from getpass import getpass
@@ -73,9 +74,12 @@ class CmsEncryptor:
     def encrypt_rsa(self, pub=None, pt=None, padding_scheme="OAEP"):
         if pub is None:
             Console.error("empty key argument")
+            sys.exit()
 
         if pt is None:
             Console.error("attempted to encrypt empty data")
+            sys.exit()
+
         elif not type(pt) == bytes:
             pt = pt.encode()
 
@@ -88,6 +92,7 @@ class CmsEncryptor:
             pad = padding.PKCS1v15
         else:
             Console.error("Unsupported padding scheme")
+            sys.exit()
 
         return pub.encrypt(pt, pad)
 
@@ -412,6 +417,8 @@ class KeyHandler:
         enc_alg = None
         if key_type == "PRIV":
             if ask_pass == False:
+                m = "Key being created without password. This is not recommended."
+                Console.warning( m )
                 enc_alg = serialization.NoEncryption()
             else:
                 pwd = self.requestPass("Password for the new key:")
@@ -439,10 +446,11 @@ class KeyHandler:
         # Check if the key is empty
         if key == None:
             Console.error("Key is empty")
-            return 
+            sys.exit()
 
         if path == None:
             Console.error("Path is empty")
+            sys.exit()
 
         # Create directories as needed for the key
         dirs = os.path.dirname(path)
@@ -455,7 +463,7 @@ class KeyHandler:
             ovwr_r = yn_choice( message=f"overwrite {path}?", default="N")
             if not ovwr_r:
                 Console.info( f"Not overwriting {path}. Quitting" )
-                return
+                sys.exit()
 
         # Write the file
         writefd(filename = path, content = key, mode = mode)
@@ -477,6 +485,7 @@ class KeyHandler:
             key_instance = rsa.RSAPrivateKey
         else:
             Console.error("Unsupported key type")
+            sys.exit()
 
         # Discern function from encoding and key type
         load_function = None
@@ -489,8 +498,11 @@ class KeyHandler:
                 load_function = serialization.load_pem_public_key
             else:
                 Console.error("Unsupported key type for PEM keys")
+                sys.exit()
         else:
             Console.error("Unsupported encoding and key-type pairing")
+            sys.exit()
+            sys.exit("Unsupported encoding and key-type pairing")
 
         # Discern password
         password = None
@@ -519,18 +531,22 @@ class KeyHandler:
                 return key
             else:
                 Console.error(f"Key instance must be {key_instance}")
+                sys.exit()
 
         except ValueError as e:
             Console.error(f"Could not properly decode {encoding} key")
+            sys.exit()
         except TypeError as e:
             Console.error("""Password mismatch either: 
             1. given a password when file is not encrypted 
             2. Not given a password when file is encrypted""")
-            raise
+            sys.exit()
         except UnsupportedAlgorithm as e:
             Console.error("Unsupported format for pyca serialization")
+            sys.exit()
         except Exception as e:
-            Console.error(f"{e}")
+            Console.error( f"{e}" )
+            sys.exit()
 
     def requestPass(self, prompt="Password for key:"):
         try:
@@ -538,6 +554,7 @@ class KeyHandler:
             return pwd
         except getpass.GetPassWarning:
             Console.error("Danger: password may be echoed")
+            sys.exit()
         except Exception as e:
             raise e
 
