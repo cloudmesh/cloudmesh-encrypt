@@ -18,22 +18,6 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.exceptions import UnsupportedAlgorithm
 
-"""
-Functions to be replaced
-1) EncryptFile.pem_verify()  
-2) EncryptFile.check_passphrase()  
-3) EncryptFile.check_key()  
-4) EncryptFile.encrypt()  
-5) EncryptFile.decrypt()  
-
-Functions to be removed
-1) EncryptFile.ssh_keygen()  
-2) EncryptFile._execute()  
-3) EncryptFile.pem_create()  
-4) EncryptFile.pem_cat()  
-"""
-
-
 class CmsEncryptor:
     """ 
     Encrypts bytes for CMS
@@ -52,10 +36,6 @@ class CmsEncryptor:
       2) Generating 384 bit ECC key
         A) Debian 
             a) TODO
-
-    Replaces the following functions
-        4) EncryptFile.encrypt()  
-        5) EncryptFile.decrypt()  
     """
 
     def __init__(self, debug=False):
@@ -79,6 +59,7 @@ class CmsEncryptor:
         if pt is None:
             Console.error("attempted to encrypt empty data")
             sys.exit()
+
         elif not type(pt) == bytes:
             pt = pt.encode()
 
@@ -144,6 +125,122 @@ class CmsEncryptor:
 
         return key, nonce, ct
 
+    def encrypt_file(self, infile=None, outfile=None, enc_aes_key=True, inkey=None):
+        """
+        Encrypts the file located at filepath using AES-GCM, and encrypt the
+        AES key with RSA if indicated. It is the responsibility of the caller 
+        to handle the returned key and nonce. 
+
+        @param infile:      Full path to the file that will be encrypted
+        @param outfile:     Full path to the desired output location
+        @param enc_aes_key: Indicate if AES key should be encrypted with pubkey
+        @param inkey:       Full path to the PEM encoded public key 
+        @return:
+            - bytes: AES-GCM key
+            - bytes: nonce (one time random data)
+        """
+
+        # Check if filepath exists
+        if not os.path.exists(infile):
+            Console.error( f"{infile} does not exists" )
+            sys.exit()
+
+        # Check if the key exists
+        if enc_aes_key == True and not os.path.exists(inkey):
+            Console.error( f"{inkey} does not exists" )
+            sys.exit()
+
+        # Check if filepath is directory
+        if os.path.isdir(infile):
+            Console.error( f"{infile} is a directory" )
+            sys.exit()
+
+        # Assign the outfile name if needed
+        if outfile == None:
+            outfile = os.path.basename(infile) + ".enc"
+
+        # Read the file contents
+        contents = readfile(infile)
+        contents = contents.encode()
+
+        # Encrypt the file using Symmetric AES-GCM encryption
+        k, n, ct = self.encrypt_aesgcm(data = contents, aad = None)
+
+        # Encrypt the key if desired
+        if enc_aes_key:
+            kh = KeyHandler()
+            u = kh.load_key(path=inkey, key_type="PUB", 
+                            encoding="PEM", ask_pass=False)
+            k = self.encrypt_rsa(pub = u, pt = k)
+
+        # Encode the data as integers
+        cipher = int.from_bytes(ct, 'big')
+
+        # Write outfile and remove infile
+        writefd(filename = outfile, content = str(cipher) )
+        Shell.rm(infile)
+
+        return k, n
+
+    def decrypt_file(self, infile = None, aes_key = None, nonce = None, 
+                outfile = None, dec_aes_key = True, inkey = None, has_pass = True):
+        """
+        Decrypts the file located at the infile with AES-GCM using the passed
+        in bytes of the key and nonce that was generated during encryption. 
+        The AES key will be decrypted using RSA if indicated. 
+        Note: This is untested with large data files
+
+        @param infile:      Full path to the file that will be decrypted
+        @param aes_key:     Bytes of the AES key generated at encryption
+        @param nonce:       Bytes of the nonce generated at encryption
+        @param outfile:     Full path to the desired output location
+        @param dec_aes_key: Indicate if AES key should be decrypted with pubkey
+        @param inkey:       Full path to the PEM encoded public key 
+        @param has_pass:    Indicates if the private key is password protected
+        """
+        #TODO: Test with large data files (10GB+)
+
+        # Check if filepath exists
+        if not os.path.exists(infile):
+            Console.error( f"{infile} does not exists" )
+            sys.exit()
+            return
+
+        # Check if the key exists
+        if dec_aes_key == True and not os.path.exists(inkey):
+            Console.error( f"{inkey} does not exists" )
+            sys.exit()
+            return
+
+        # Check if filepath is directory
+        if os.path.isdir(infile):
+            Console.error( f"{infile} is a directory" )
+            sys.exit()
+            return
+
+        # Assign the outfile name if needed
+        if outfile == None:
+            name = os.path.basename(infile)
+            if name[:-4] == '.enc':
+                outfile = infile[:-4]
+            else:
+                outfile = infile
+
+        # Decrypt AES key if indicated
+        if dec_aes_key:
+            kh = KeyHandler()
+            r = kh.load_key(path=inkey, key_type="PRIV", 
+                            encoding = "PEM", ask_pass = has_pass)
+            aes_key = self.decrypt_rsa(priv = r, ct = aes_key)
+
+        # Read file and calculate bytes
+        ct = int(readfile(filename = infile))
+        b_ct = ct.to_bytes((ct.bit_length() + 7) // 8, 'big')
+
+        # Decrypt ciphertext
+        pt = self.decrypt_aesgcm(key = aes_key, nonce = nonce, aad=None, ct = b_ct)
+        writefd(filename = outfile, content = pt.decode() )
+        Shell.rm(infile)
 
 class CmsHasher:
     def __init__(self, data=None, data_type=str):
@@ -201,11 +298,6 @@ class CmsHasher:
 class KeyHandler:
     """ 
     Responsible for the loading and creation of keys
-
-    Replaces the older functions of 
-        1) EncryptFile.check_key
-        1) EncryptFile.check_passphares
-        1) EncryptFile.pem_verify
     """
 
     def __init__(self, debug=False, priv=None, pub=None, pem=None):
@@ -318,6 +410,8 @@ class KeyHandler:
         enc_alg = None
         if key_type == "PRIV":
             if ask_pass == False:
+                m = "Key being created without password. This is not recommended."
+                Console.warning( m )
                 enc_alg = serialization.NoEncryption()
             else:
                 pwd = self.requestPass("Password for the new key:")
@@ -362,7 +456,7 @@ class KeyHandler:
             ovwr_r = yn_choice( message=f"overwrite {path}?", default="N")
             if not ovwr_r:
                 Console.info( f"Not overwriting {path}. Quitting" )
-                return
+                sys.exit()
 
         # Write the file
         writefd(filename = path, content = key, mode = mode)
@@ -443,7 +537,7 @@ class KeyHandler:
             Console.error("Unsupported format for pyca serialization")
             sys.exit()
         except Exception as e:
-            Console.error(f"{e}")
+            Console.error( f"{e}" )
             sys.exit()
 
     def requestPass(self, prompt="Password for key:"):
@@ -455,157 +549,3 @@ class KeyHandler:
             sys.exit()
         except Exception as e:
             raise e
-
-
-# BUG: TODO: usage of path_expand is compleyely wrong
-
-# security import ~/.ssh/id_rsa_.pem -k ~/Library/Keychains/login.keychain
-
-# $ brew install openssl
-# $ brew link openssl --force
-# brew install openssh --with-libressl
-
-class EncryptFile(object):
-    """
-
-    keys must be generated with
-
-        ssh-keygen -t rsa -m pem
-        openssl rsa -in id_rsa -out id_rsa.pem
-
-    """
-
-    # noinspection PyShadowingNames
-    def __init__(self, filename, secret):
-        self.data = dotdict({
-            'file': filename,
-            'secret': secret,
-            'pem': path_expand('~/.ssh/id_rsa.pem'),
-            'key': path_expand('~/.ssh/id_rsa')
-        })
-        if not os.path.exists(self.data["pem"]):
-            self.pem_create()
-
-    def ssh_keygen(self):
-        command = "ssh-keygen -t rsa -m pem"
-        os.system(command)
-        self.pem_create()
-
-    # noinspection PyShadowingNames,PyShadowingNames
-    def check_key(self, filename=None):
-        if filename is None:
-            filename = self.data["key"]
-        error = False
-        with open(filename) as key:
-            content = key.read()
-
-        if "BEGIN RSA PRIVATE KEY" not in content:
-            Console.error("Key is not a pure RSA key")
-            error = True
-        if "Proc-Type: 4,ENCRYPTED" in content and "DEK-Info:" not in content:
-            Console.error("Key has no passphrase")
-            error = True
-
-        if error:
-            Console.error("Key is not valid for cloudmesh")
-            return False
-        else:
-            return True
-
-    # noinspection PyMethodMayBeStatic
-    def _execute(self, command):
-        os.system(command)
-
-    # noinspection PyPep8,PyBroadException
-    def check_passphrase(self):
-        """
-        this does not work with pem
-
-        checks if the ssh key has a password
-        :return:
-        """
-
-        self.data["passphrase"] = getpass("Passphrase:")
-
-        if self.data.passphrase is None or self.data.passphrase == "":
-            Console.error("No passphrase specified.")
-            raise ValueError('No passphrase specified.')
-
-        try:
-            command = "ssh-keygen -p -P {passphrase} -N {passphrase} -f {key}".format(
-                **self.data)
-            r = Shell.execute(command, shell=True, traceflag=False)
-
-            if "Your identification has been saved with the new passphrase." in r:
-                Console.ok("Password ok.")
-                return True
-        except:
-            Console.error("Password not correct.")
-
-        return False
-
-    def pem_verify(self):
-        """
-        this does not work
-        :return:
-        """
-        if platform.system().lower() == 'darwin':
-            command = "security verify-cert -c {key}.pem".format(**self.data)
-            self._execute(command)
-
-        command = "openssl verify  {key}.pem".format(**self.data)
-        self._execute(command)
-
-    def pem_create(self):
-        command = path_expand(
-            "openssl rsa -in {key} -pubout  > {pem}".format(**self.data))
-
-        # command = path_expand("openssl rsa -in id_rsa -pubout  > {pem}"
-        # .format(**self.data))
-        self._execute(command)
-        command = "chmod go-rwx {key}.pem".format(**self.data)
-        self._execute(command)
-
-    # openssl rsa -in ~/.ssh/id_rsa -out ~/.ssh/id_rsa.pem
-    # TODO: BUG
-    #
-    def pem_cat(self):
-        command = path_expand("cat {pem}".format(**self.data))
-        self._execute(command)
-
-    def encrypt(self):
-        # encrypt the file into secret.txt
-        print(self.data)
-        command = path_expand(
-            "openssl rsautl -encrypt -pubin "
-            "-inkey {key}.pem -in {file} -out {secret}".format(**self.data))
-        self._execute(command)
-
-    # noinspection PyShadowingNames
-    def decrypt(self, filename=None):
-        if filename is not None:
-            self.data['secret'] = filename
-
-        command = path_expand(
-            "openssl rsautl -decrypt "
-            "-inkey {key} -in {secret} -out {file}".format(**self.data))
-        self._execute(command)
-
-
-if __name__ == "__main__":
-
-    for filename in ['file.txt', 'secret.txt']:
-        # noinspection PyBroadException
-        try:
-            os.remove(filename)
-        except Exception as e:
-            pass
-
-    # Creating a file with data
-
-    with open("file.txt", "w") as f:
-        f.write("Big Data is here.")
-
-    e = EncryptFile('file.txt', 'secret.txt')
-    e.encrypt()
-    e.decrypt()
