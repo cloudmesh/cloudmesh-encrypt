@@ -1,4 +1,5 @@
 import os
+import sys
 import platform
 from base64 import b64encode
 from getpass import getpass
@@ -73,9 +74,11 @@ class CmsEncryptor:
     def encrypt_rsa(self, pub=None, pt=None, padding_scheme="OAEP"):
         if pub is None:
             Console.error("empty key argument")
+            sys.exit()
 
         if pt is None:
             Console.error("attempted to encrypt empty data")
+            sys.exit()
         elif not type(pt) == bytes:
             pt = pt.encode()
 
@@ -88,14 +91,17 @@ class CmsEncryptor:
             pad = padding.PKCS1v15
         else:
             Console.error("Unsupported padding scheme")
+            sys.exit()
 
         return pub.encrypt(pt, pad)
 
     def decrypt_rsa(self, priv=None, ct=None, padding_scheme="OAEP"):
         if priv is None:
             Console.error("empty key arugment")
+            sys.exit()
         if ct is None:
             Console.error("attempted to decrypt empty data")
+            sys.exit()
         pad = None
         if padding_scheme == "OAEP":
             pad = padding.OAEP(
@@ -106,6 +112,7 @@ class CmsEncryptor:
             pad = padding.PKCS1v15
         else:
             Console.error("Unsupported padding scheme")
+            sys.exit()
 
         # return priv.decrypt( ct, pad ).decode()
         return priv.decrypt(ct, pad)
@@ -126,6 +133,7 @@ class CmsEncryptor:
         """
         if data is None:
             Console.error("Attempted to encrypt empty data")
+            sys.exit()
 
         # ALWAYS generate a new nonce. 
         # ALL security is lost if same nonce and key are used with diff text 
@@ -147,7 +155,8 @@ class CmsHasher:
             elif data_type is bytes:
                 self.data = data
             else:
-                Console.error("data_type not supported")
+                Console.error( f"data_type:{data_type} is not supported")
+                sys.exit()
 
     def hash_data(self, data=None, hash_alg="SHA256"
                   , encoding=False, clean=False):
@@ -162,6 +171,7 @@ class CmsHasher:
             digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
         else:
             Console.error("Unsupported Hashing algorithm")
+            sys.exit()
 
         if type(data) is str:
             data = data.encode()
@@ -175,6 +185,7 @@ class CmsHasher:
             hashed = b64encode(hashed).decode()
         else:
             Console.error("Unknown encoding requested")
+            sys.exit()
 
         # Clean data for system purposes if requested
         if clean:
@@ -228,6 +239,7 @@ class KeyHandler:
         """
         if priv == None:
             Console.error( "No key was given" )
+            sys.exit()
         elif isinstance(priv, rsa.RSAPrivateKey):
             return priv.public_key()
         else:
@@ -250,15 +262,18 @@ class KeyHandler:
             if key_type == "PRIV":
                 if self.priv is None:
                     Console.error("No key given")
+                    sys.exit()
                 else:
                     key = self.priv
             elif key_type == "PUB":
                 if self.pub is None:
                     Console.error("No key given")
+                    sys.exit()
                 else:
                     key = self.pub
             else:
                 Console.error("No key given")
+                sys.exit()
 
         # Discern formating based on if key is public or private
         key_format = None
@@ -268,6 +283,7 @@ class KeyHandler:
             key_format = serialization.PublicFormat
         else:
             Console.error("key needs to be PRIV or PUB")
+            sys.exit()
 
         # Discern formatting of key
         if key_type == "PRIV":
@@ -277,6 +293,7 @@ class KeyHandler:
                 key_format = key_format.TraditionalOpenSSL
             else:
                 Console.error("Unsupported private key format")
+                sys.exit()
         elif key_type == "PUB":
             if format == "SubjectInfo":
                 key_format = key_format.SubjectPublicKeyInfo
@@ -284,6 +301,7 @@ class KeyHandler:
                 key_format = key_format.OpenSSH
             else:
                 Console.error("Unsupported public key format")
+                sys.exit()
 
         # Discern encoding
         encode = None
@@ -293,6 +311,7 @@ class KeyHandler:
             encode = serialization.Encoding.OpenSSH
         else:
             Console.error("Unsupported key encoding")
+            sys.exit()
 
         # Discern encryption algorithm (Private keys only)
         # This also assigns the password if given
@@ -326,10 +345,11 @@ class KeyHandler:
         # Check if the key is empty
         if key == None:
             Console.error("Key is empty")
-            return 
+            sys.exit()
 
         if path == None:
             Console.error("Path is empty")
+            sys.exit()
 
         # Create directories as needed for the key
         dirs = os.path.dirname(path)
@@ -364,6 +384,7 @@ class KeyHandler:
             key_instance = rsa.RSAPrivateKey
         else:
             Console.error("Unsupported key type")
+            sys.exit()
 
         # Discern function from encoding and key type
         load_function = None
@@ -376,8 +397,10 @@ class KeyHandler:
                 load_function = serialization.load_pem_public_key
             else:
                 Console.error("Unsupported key type for PEM keys")
+                sys.exit()
         else:
             Console.error("Unsupported encoding and key-type pairing")
+            sys.exit()
 
         # Discern password
         password = None
@@ -406,18 +429,22 @@ class KeyHandler:
                 return key
             else:
                 Console.error(f"Key instance must be {key_instance}")
+                sys.exit()
 
         except ValueError as e:
             Console.error(f"Could not properly decode {encoding} key")
+            sys.exit()
         except TypeError as e:
             Console.error("""Password mismatch either: 
             1. given a password when file is not encrypted 
             2. Not given a password when file is encrypted""")
-            raise
+            sys.exit()
         except UnsupportedAlgorithm as e:
             Console.error("Unsupported format for pyca serialization")
+            sys.exit()
         except Exception as e:
             Console.error(f"{e}")
+            sys.exit()
 
     def requestPass(self, prompt="Password for key:"):
         try:
@@ -425,6 +452,7 @@ class KeyHandler:
             return pwd
         except getpass.GetPassWarning:
             Console.error("Danger: password may be echoed")
+            sys.exit()
         except Exception as e:
             raise e
 
