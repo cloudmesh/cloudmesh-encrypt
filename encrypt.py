@@ -418,7 +418,7 @@ class KeyHandler:
                 if pwd == "":
                     enc_alg = serialization.NoEncryption()
                 else:
-                    pwd = str.encode(password)
+                    pwd = str.encode(pwd)
                     enc_alg = serialization.BestAvailableEncryption(pwd)
 
         # Serialize key
