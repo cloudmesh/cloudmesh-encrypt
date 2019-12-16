@@ -41,7 +41,8 @@ class CmsEncryptor:
         A) Debian
             a) Ensure openssl is installed
             b) Execute: openssl genrsa -aes256 -out <priv_key_name>
-            c) Execute: openssl rsa -in <priv_name> -outform PEM -pubout -out <pub_name>
+            c) Execute:
+               openssl rsa -in <priv_name> -outform PEM -pubout -out <pub_name>
 
       2) Generating 2048 bit RSA Private and Public SSH keys
         A) Debian
@@ -61,10 +62,12 @@ class CmsEncryptor:
         self.debug = debug
         self.tmp = path_expand("~/.cloudmesh/tmp")
 
+    # noinspection PyPep8Naming
     def getRandomBytes(self, len_bytes=32):
         rand_bytes = os.urandom(len_bytes)
         return rand_bytes
 
+    # noinspection PyPep8Naming
     def getRandomInt(self, len_bytes=32, order="big"):
         rb = self.getRandomBytes(len_bytes)
         rand_int = int.from_bytes(rb, byteorder=order)
@@ -169,7 +172,7 @@ class CmsHasher:
         hashed = digest.finalize()
 
         # Encode data if requested
-        if encoding == False:
+        if not encoding:
             """no op, just for check"""
         elif encoding == "b64":
             hashed = b64encode(hashed).decode()
@@ -198,9 +201,9 @@ class KeyHandler:
     """
 
     def __init__(self, debug=False, priv=None, pub=None, pem=None):
-        ### CMS debug parameter
+        # CMS debug parameter
         self.debug = debug
-        ### pyca Key Objects
+        # pyca Key Objects
         self.priv = priv
         self.pub = pub
         self.pem = pem
@@ -223,7 +226,7 @@ class KeyHandler:
 
         # Password management
         pwd = None
-        if ask_password == False:  # Explicitly ensure password wasn't desired
+        if not ask_password:  # Explicitly ensure password wasn't desired
             pwd = None
         else:  # All other cases will request password
             pwd = self.requestPass("Password for the new key:")
@@ -356,7 +359,7 @@ class KeyHandler:
 
         # Discern password
         password = None
-        if ask_pass == False:
+        if not ask_pass:
             password = None
         else:  # All other cases should request password
             password = self.requestPass(
@@ -394,6 +397,7 @@ class KeyHandler:
         except Exception as e:
             Console.error(f"{e}")
 
+    # noinspection PyPep8Naming
     def requestPass(self, prompt="Password for key:"):
         try:
             pwd = getpass(prompt)
