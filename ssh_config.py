@@ -181,7 +181,7 @@ class ssh_config(object):
                 Console.ok("Added india to ~/.ssh/config")
         except Exception as e:
             if verbose:
-                Console.error(e.message)
+                Console.error(f"{e}")
 
 
 if __name__ == "__main__":
@@ -189,7 +189,7 @@ if __name__ == "__main__":
 
     hosts = ssh_config()
 
-    user = ConfigDict("cloudmesh.yaml")["cloudmesh.profile.user"]
+    user = Config("cloudmesh.yaml")["cloudmesh.profile.user"]
 
     print("User:", user)
 

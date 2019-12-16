@@ -1,22 +1,19 @@
 import os
 import sys
-import platform
 from base64 import b64encode
-from getpass import getpass
+import getpass
 
 from cloudmesh.common.Shell import Shell
 from cloudmesh.common.console import Console
-from cloudmesh.common.debug import VERBOSE
-from cloudmesh.common.dotdict import dotdict
 from cloudmesh.common.util import path_expand, readfile, writefd, yn_choice
-
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.exceptions import UnsupportedAlgorithm
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
 
 class CmsEncryptor:
     """ 
@@ -128,7 +125,8 @@ class CmsEncryptor:
 
         return key, nonce, ct
 
-    def encrypt_file(self, infile=None, outfile=None, enc_aes_key=True, inkey=None):
+    def encrypt_file(self, infile=None, outfile=None, enc_aes_key=True,
+                     inkey=None):
         """
         Encrypts the file located at filepath using AES-GCM, and encrypt the
         AES key with RSA if indicated. It is the responsibility of the caller 
@@ -145,21 +143,21 @@ class CmsEncryptor:
 
         # Check if filepath exists
         if not os.path.exists(infile):
-            Console.error( f"{infile} does not exists" )
+            Console.error(f"{infile} does not exists")
             sys.exit()
 
         # Check if the key exists
-        if enc_aes_key == True and not os.path.exists(inkey):
-            Console.error( f"{inkey} does not exists" )
+        if enc_aes_key and not os.path.exists(inkey):
+            Console.error(f"{inkey} does not exists")
             sys.exit()
 
         # Check if filepath is directory
         if os.path.isdir(infile):
-            Console.error( f"{infile} is a directory" )
+            Console.error(f"{infile} is a directory")
             sys.exit()
 
         # Assign the outfile name if needed
-        if outfile == None:
+        if outfile is None:
             outfile = os.path.basename(infile) + ".enc"
 
         # Read the file contents
@@ -167,26 +165,26 @@ class CmsEncryptor:
         contents = contents.encode()
 
         # Encrypt the file using Symmetric AES-GCM encryption
-        k, n, ct = self.encrypt_aesgcm(data = contents, aad = None)
+        k, n, ct = self.encrypt_aesgcm(data=contents, aad=None)
 
         # Encrypt the key if desired
         if enc_aes_key:
             kh = KeyHandler()
-            u = kh.load_key(path=inkey, key_type="PUB", 
+            u = kh.load_key(path=inkey, key_type="PUB",
                             encoding="PEM", ask_pass=False)
-            k = self.encrypt_rsa(pub = u, pt = k)
+            k = self.encrypt_rsa(pub=u, pt=k)
 
         # Encode the data as integers
         cipher = int.from_bytes(ct, 'big')
 
         # Write outfile and remove infile
-        writefd(filename = outfile, content = str(cipher) )
+        writefd(filename=outfile, content=str(cipher))
         Shell.rm(infile)
 
         return k, n
 
-    def decrypt_file(self, infile = None, aes_key = None, nonce = None, 
-                outfile = None, dec_aes_key = True, inkey = None, has_pass = True):
+    def decrypt_file(self, infile=None, aes_key=None, nonce=None,
+                     outfile=None, dec_aes_key=True, inkey=None, has_pass=True):
         """
         Decrypts the file located at the infile with AES-GCM using the passed
         in bytes of the key and nonce that was generated during encryption. 
@@ -201,28 +199,25 @@ class CmsEncryptor:
         @param inkey:       Full path to the PEM encoded public key 
         @param has_pass:    Indicates if the private key is password protected
         """
-        #TODO: Test with large data files (10GB+)
+        # TODO: Test with large data files (10GB+)
 
         # Check if filepath exists
         if not os.path.exists(infile):
-            Console.error( f"{infile} does not exists" )
+            Console.error(f"{infile} does not exists")
             sys.exit()
-            return
 
         # Check if the key exists
-        if dec_aes_key == True and not os.path.exists(inkey):
-            Console.error( f"{inkey} does not exists" )
+        if dec_aes_key and not os.path.exists(inkey):
+            Console.error(f"{inkey} does not exists")
             sys.exit()
-            return
 
         # Check if filepath is directory
         if os.path.isdir(infile):
-            Console.error( f"{infile} is a directory" )
+            Console.error(f"{infile} is a directory")
             sys.exit()
-            return
 
         # Assign the outfile name if needed
-        if outfile == None:
+        if outfile is None:
             name = os.path.basename(infile)
             if name[:-4] == '.enc':
                 outfile = infile[:-4]
@@ -232,18 +227,19 @@ class CmsEncryptor:
         # Decrypt AES key if indicated
         if dec_aes_key:
             kh = KeyHandler()
-            r = kh.load_key(path=inkey, key_type="PRIV", 
-                            encoding = "PEM", ask_pass = has_pass)
-            aes_key = self.decrypt_rsa(priv = r, ct = aes_key)
+            r = kh.load_key(path=inkey, key_type="PRIV",
+                            encoding="PEM", ask_pass=has_pass)
+            aes_key = self.decrypt_rsa(priv=r, ct=aes_key)
 
         # Read file and calculate bytes
-        ct = int(readfile(filename = infile))
+        ct = int(readfile(filename=infile))
         b_ct = ct.to_bytes((ct.bit_length() + 7) // 8, 'big')
 
         # Decrypt ciphertext
-        pt = self.decrypt_aesgcm(key = aes_key, nonce = nonce, aad=None, ct = b_ct)
-        writefd(filename = outfile, content = pt.decode() )
+        pt = self.decrypt_aesgcm(key=aes_key, nonce=nonce, aad=None, ct=b_ct)
+        writefd(filename=outfile, content=pt.decode())
         Shell.rm(infile)
+
 
 class CmsHasher:
     def __init__(self, data=None, data_type=str):
@@ -255,7 +251,7 @@ class CmsHasher:
             elif data_type is bytes:
                 self.data = data
             else:
-                Console.error( f"data_type:{data_type} is not supported")
+                Console.error(f"data_type:{data_type} is not supported")
                 sys.exit()
 
     def hash_data(self, data=None, hash_alg="SHA256"
@@ -326,15 +322,14 @@ class KeyHandler:
 
         return self.priv
 
-
-    def get_pub_key(self, priv = None):
+    def get_pub_key(self, priv=None):
         """
         Given a Pyca private key instance return a Pyca public key instance
         @param priv: the PYCA private key
         return: the pyca RsaPublicKey
         """
-        if priv == None:
-            Console.error( "No key was given" )
+        if priv is None:
+            Console.error("No key was given")
             sys.exit()
         elif isinstance(priv, rsa.RSAPrivateKey):
             return priv.public_key()
@@ -349,7 +344,8 @@ class KeyHandler:
         @param: key_type:   the type of key file [PRIV, PUB]
         @param: encoding:   the type of encoding [PEM, SSH]
         @param: format:     private [PKCS8, OpenSSL], Public [SubjectInfo, SSH]
-        @param: ask_pass:   Indicates if the key should have a password (True,False)
+        @param: ask_pass:   Indicates if the key should have a password
+                            (True,False)
         return:             serialized key bytes of the key
         """
         # TODO: add try-catching
@@ -413,9 +409,10 @@ class KeyHandler:
         # This also assigns the password if given
         enc_alg = None
         if key_type == "PRIV":
-            if ask_pass == False:
-                m = "Key being created without password. This is not recommended."
-                Console.warning( m )
+            if not ask_pass:
+                m = "Key being created without password. "\
+                    "This is not recommended."
+                Console.warning(m)
                 enc_alg = serialization.NoEncryption()
             else:
                 pwd = self.requestPass("Password for the new key:")
@@ -434,18 +431,18 @@ class KeyHandler:
                                    encryption_algorithm=enc_alg)
         return sk
 
-    def write_key(self, key = None, path = None, mode = "wb"):
+    def write_key(self, key=None, path=None, mode="wb"):
         """
         Writes the key to the path, creating directories as needed"
         @param key:     The data being written yca key instance
         @param path:    full path including file name
         """
         # Check if the key is empty
-        if key == None:
+        if key is None:
             Console.error("Key is empty")
             sys.exit()
 
-        if path == None:
+        if path is None:
             Console.error("Path is empty")
             sys.exit()
 
@@ -456,14 +453,14 @@ class KeyHandler:
 
         # Check if file exists at locations
         if os.path.exists(path):
-            Console.info( f"{path} already exists" )
-            ovwr_r = yn_choice( message=f"overwrite {path}?", default="N")
+            Console.info(f"{path} already exists")
+            ovwr_r = yn_choice(message=f"overwrite {path}?", default="N")
             if not ovwr_r:
-                Console.info( f"Not overwriting {path}. Quitting" )
+                Console.info(f"Not overwriting {path}. Quitting")
                 sys.exit()
 
         # Write the file
-        writefd(filename = path, content = key, mode = mode)
+        writefd(filename=path, content=key, mode=mode)
 
     def load_key(self, path="", key_type="PUB", encoding="SSH", ask_pass=True):
         """
@@ -517,6 +514,7 @@ class KeyHandler:
 
         # Attempt to load the formatted contents
         try:
+            key = None
             if key_type == "PUB":
                 key = load_function(data, default_backend())
             elif key_type == "PRIV":
@@ -541,13 +539,13 @@ class KeyHandler:
             Console.error("Unsupported format for pyca serialization")
             sys.exit()
         except Exception as e:
-            Console.error( f"{e}" )
+            Console.error(f"{e}")
             sys.exit()
 
     # noinspection PyPep8Naming
     def requestPass(self, prompt="Password for key:"):
         try:
-            pwd = getpass(prompt)
+            pwd = getpass.getpass(prompt)
             return pwd
         except getpass.GetPassWarning:
             Console.error("Danger: password may be echoed")

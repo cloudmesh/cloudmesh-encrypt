@@ -59,6 +59,9 @@ class AuthorizedKeys(object):
         """
         auth = cls()
         with open(path) as fd:
+            #
+            # TODO: BUG: can not find imap in itertools
+            #
             for pubkey in itertools.imap(str.strip, fd):
                 # skip empty lines
                 if not pubkey:
