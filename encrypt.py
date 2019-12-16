@@ -326,24 +326,7 @@ class KeyHandler:
 
         return self.priv
 
-<<<<<<< HEAD
-        # Password management
-        pwd = None
-        if not ask_password:  # Explicitly ensure password wasn't desired
-            pwd = None
-        else:  # All other cases will request password
-            pwd = self.requestPass("Password for the new key:")
 
-        # Serialize the key
-        return self.serialize_key(key_type="PRIV", password=pwd)
-
-    def get_pub_key_bytes(self, encoding="PEM", format="SubjectInfo"):
-        if self.pub is None:
-            if self.priv is None:
-                Console.error("Key data is empty")
-            else:
-                self.pub = self.priv.public_key()
-=======
     def get_pub_key(self, priv = None):
         """
         Given a Pyca private key instance return a Pyca public key instance
@@ -355,7 +338,6 @@ class KeyHandler:
             sys.exit()
         elif isinstance(priv, rsa.RSAPrivateKey):
             return priv.public_key()
->>>>>>> 2b5e483157ac4b040c353d4064453d221e618ed5
         else:
             raise UnsupportedAlgorithm
 
