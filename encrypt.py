@@ -69,6 +69,7 @@ class CmsEncryptor:
                                algorithm=hashes.SHA256(),
                                label=None)
         elif padding_scheme == "PKCS":
+            # NOTE: This scheme should only be used for signing NOT encryption
             pad = padding.PKCS1v15
         else:
             Console.error("Unsupported padding scheme")
@@ -529,7 +530,7 @@ class KeyHandler:
 
         except ValueError as e:
             Console.error(f"Could not properly decode {encoding} key")
-            sys.exit()
+            raise e
         except TypeError as e:
             Console.error("""Password mismatch either: 
             1. given a password when file is not encrypted 
