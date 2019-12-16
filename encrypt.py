@@ -68,9 +68,6 @@ class CmsEncryptor:
             pad = padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
                                algorithm=hashes.SHA256(),
                                label=None)
-        elif padding_scheme == "PKCS":
-            # NOTE: This scheme should only be used for signing NOT encryption
-            pad = padding.PKCS1v15
         else:
             Console.error("Unsupported padding scheme")
             sys.exit()
@@ -90,8 +87,6 @@ class CmsEncryptor:
                 mgf=padding.MGF1(algorithm=hashes.SHA256()),
                 algorithm=hashes.SHA256(),
                 label=None)
-        elif padding_scheme == "PKCS":
-            pad = padding.PKCS1v15
         else:
             Console.error("Unsupported padding scheme")
             sys.exit()
