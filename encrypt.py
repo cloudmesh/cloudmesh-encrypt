@@ -494,7 +494,8 @@ class KeyHandler:
                 Console.error("Unsupported key type for PEM keys")
                 sys.exit()
         else:
-            Console.error("Unsupported encoding and key-type pairing")
+            m = f"Unsupported key-type,encoding pair({key_type},{encoding})"
+            Console.error(m)
             sys.exit()
 
         # Discern password
@@ -541,6 +542,79 @@ class KeyHandler:
         except Exception as e:
             Console.error(f"{e}")
             sys.exit()
+
+    def reformat_key(self, path = None, key_type = None, use_pem = True,
+                    new_format = None, ask_pass = True):
+
+        # Determine filepath
+        fp = None
+        if path is None:
+            kp = path_expand("~/.ssh/id_rsa")
+            fp = kp + ".pub"
+        else:
+            fp = path_expand(path)
+
+        # Discern if we ask for password key type
+        if key_type == "PUB":
+            ask_pass = False
+
+        # Discern target encoding
+        oenc = None # original encoding
+        nenc = None # new encoding
+        # If converting the key to SSH encoding
+        if use_pem:
+            if key_type == "PUB":
+                oenc = "SSH"
+                nenc = "PEM"
+            else:
+                oenc = nenc = "PEM"
+        else: #OpenSSH encoding
+            # If user attempts to reformat private key to SSH
+            if key_type == "PRIV":
+                Console.error("Private keys cannot have SSH encoding")
+                sys.exit()
+            # Assign original and new encodings
+            oenc = "PEM"
+            nenc = "SSH"
+
+        # Discern Format
+        forma = None
+        if key_type == "PUB":
+            # If the user did not provide a format decide one
+            if new_format is None:
+                if use_pem:
+                    forma = "SubjectInfo"
+                else:
+                    forma = "SSH"
+            else: # format argument not provided
+                forma = new_format
+                if forma != "SSH" and forma != "SubjectInfo":
+                    m = f"Public keys must have SSH or SubjectInfo format"
+                    Console.error(m)
+                    sys.exit()
+        else: # Private key
+            if new_format is None:
+                forma = "PKCS8"
+            else:
+                forma = new_format
+                if forma != "PKCS8" and forma != "OpenSSL":
+                    m = "Private keys must have PKCS8 or OpenSSL format"
+                    Console.error(m)
+                    sys.exit()
+
+        # load {key_type} key at {path} with {old_encoding}
+        k = self.load_key(path = fp, key_type = key_type,
+                          encoding=oenc, ask_pass = ask_pass)
+
+        # searialze key with {new_format} and {new_encoding}
+        k = self.serialize_key(key = k,
+                                key_type = key_type,
+                                encoding = nenc,
+                                format = forma,
+                                ask_pass = ask_pass)
+
+        # write the key to {path}
+        self.write_key(key = k, path = fp, mode = "wb", force = True)
 
     # noinspection PyPep8Naming
     def requestPass(self, prompt="Password for key:", confirm = True):
