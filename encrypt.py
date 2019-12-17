@@ -427,12 +427,15 @@ class KeyHandler:
                                    encryption_algorithm=enc_alg)
         return sk
 
-    def write_key(self, key=None, path=None, mode="wb"):
+    def write_key(self, key = None, path = None, mode = "wb", force = False):
         """
         Writes the key to the path, creating directories as needed"
         @param key:     The data being written yca key instance
-        @param path:    full path including file name
+        @param path:    Full path including file name
+        @param mode:    The mode for writing to the file
+        @param force:   Automatically overwrite file if it exists
         """
+
         # Check if the key is empty
         if key is None:
             Console.error("Key is empty")
@@ -447,13 +450,14 @@ class KeyHandler:
         if not os.path.exists(dirs):
             Shell.mkdir(dirs)
 
-        # Check if file exists at locations
-        if os.path.exists(path):
-            Console.info(f"{path} already exists")
-            ovwr_r = yn_choice(message=f"overwrite {path}?", default="N")
-            if not ovwr_r:
-                Console.info(f"Not overwriting {path}. Quitting")
-                sys.exit()
+        if not force:
+            # Check if file exists at locations
+            if os.path.exists(path):
+                Console.info(f"{path} already exists")
+                ovwr_r = yn_choice(message=f"overwrite {path}?", default="N")
+                if not ovwr_r:
+                    Console.info(f"Not overwriting {path}. Quitting")
+                    sys.exit()
 
         # Write the file
         writefd(filename=path, content=key, mode=mode)
@@ -498,8 +502,8 @@ class KeyHandler:
         if not ask_pass:
             password = None
         else:  # All other cases should request password
-            password = self.requestPass(
-                f"Password for {path} [press enter if none]:")
+            prompt = f"Password for {path} [press enter if none]: "
+            password = self.requestPass(prompt, confirm = False)
             if password == "":
                 password = None
             else:
@@ -530,7 +534,7 @@ class KeyHandler:
             Console.error("""Password mismatch either: 
             1. given a password when file is not encrypted 
             2. Not given a password when file is encrypted""")
-            sys.exit()
+            raise e
         except UnsupportedAlgorithm as e:
             Console.error("Unsupported format for pyca serialization")
             sys.exit()
@@ -539,10 +543,21 @@ class KeyHandler:
             sys.exit()
 
     # noinspection PyPep8Naming
-    def requestPass(self, prompt="Password for key:"):
+    def requestPass(self, prompt="Password for key:", confirm = True):
         try:
-            pwd = getpass.getpass(prompt)
-            return pwd
+            pwd1 = getpass.getpass(prompt)
+
+            # Request password input twice to confirm input
+            if confirm:
+                pwd2 = getpass.getpass("Confirm password:")
+                if pwd1 == pwd2:
+                    return pwd1
+                else:
+                    Console.error("Mismatched passwords")
+                    sys.exit()
+            else:
+                return pwd1
+
         except getpass.GetPassWarning:
             Console.error("Danger: password may be echoed")
             sys.exit()
