@@ -432,12 +432,15 @@ class KeyHandler:
                                    encryption_algorithm=enc_alg)
         return sk
 
-    def write_key(self, key=None, path=None, mode="wb"):
+    def write_key(self, key = None, path = None, mode = "wb", force = False):
         """
         Writes the key to the path, creating directories as needed"
         @param key:     The data being written yca key instance
-        @param path:    full path including file name
+        @param path:    Full path including file name
+        @param mode:    The mode for writing to the file
+        @param force:   Automatically overwrite file if it exists
         """
+
         # Check if the key is empty
         if key is None:
             Console.error("Key is empty")
@@ -452,13 +455,14 @@ class KeyHandler:
         if not os.path.exists(dirs):
             Shell.mkdir(dirs)
 
-        # Check if file exists at locations
-        if os.path.exists(path):
-            Console.info(f"{path} already exists")
-            ovwr_r = yn_choice(message=f"overwrite {path}?", default="N")
-            if not ovwr_r:
-                Console.info(f"Not overwriting {path}. Quitting")
-                sys.exit()
+        if not force:
+            # Check if file exists at locations
+            if os.path.exists(path):
+                Console.info(f"{path} already exists")
+                ovwr_r = yn_choice(message=f"overwrite {path}?", default="N")
+                if not ovwr_r:
+                    Console.info(f"Not overwriting {path}. Quitting")
+                    sys.exit()
 
         # Write the file
         writefd(filename=path, content=key, mode=mode)
@@ -495,7 +499,8 @@ class KeyHandler:
                 Console.error("Unsupported key type for PEM keys")
                 sys.exit()
         else:
-            Console.error("Unsupported encoding and key-type pairing")
+            m = f"Unsupported key-type,encoding pair({key_type},{encoding})"
+            Console.error(m)
             sys.exit()
 
         # Discern password
@@ -503,8 +508,8 @@ class KeyHandler:
         if not ask_pass:
             password = None
         else:  # All other cases should request password
-            password = self.requestPass(
-                f"Password for {path} [press enter if none]:")
+            prompt = f"Password for {path} [press enter if none]: "
+            password = self.requestPass(prompt, confirm = False)
             if password == "":
                 password = None
             else:
@@ -535,7 +540,7 @@ class KeyHandler:
             Console.error("""Password mismatch either: 
             1. given a password when file is not encrypted 
             2. Not given a password when file is encrypted""")
-            sys.exit()
+            raise e
         except UnsupportedAlgorithm as e:
             Console.error("Unsupported format for pyca serialization")
             sys.exit()
@@ -543,11 +548,95 @@ class KeyHandler:
             Console.error(f"{e}")
             sys.exit()
 
+    def reformat_key(self, path = None, key_type = None, use_pem = True,
+                    new_format = None, ask_pass = True):
+
+        # Determine filepath
+        fp = None
+        if path is None:
+            kp = path_expand("~/.ssh/id_rsa")
+            fp = kp + ".pub"
+        else:
+            fp = path_expand(path)
+
+        # Discern if we ask for password key type
+        if key_type == "PUB":
+            ask_pass = False
+
+        # Discern target encoding
+        oenc = None # original encoding
+        nenc = None # new encoding
+        # If converting the key to SSH encoding
+        if use_pem:
+            if key_type == "PUB":
+                oenc = "SSH"
+                nenc = "PEM"
+            else:
+                oenc = nenc = "PEM"
+        else: #OpenSSH encoding
+            # If user attempts to reformat private key to SSH
+            if key_type == "PRIV":
+                Console.error("Private keys cannot have SSH encoding")
+                sys.exit()
+            # Assign original and new encodings
+            oenc = "PEM"
+            nenc = "SSH"
+
+        # Discern Format
+        forma = None
+        if key_type == "PUB":
+            # If the user did not provide a format decide one
+            if new_format is None:
+                if use_pem:
+                    forma = "SubjectInfo"
+                else:
+                    forma = "SSH"
+            else: # format argument not provided
+                forma = new_format
+                if forma != "SSH" and forma != "SubjectInfo":
+                    m = f"Public keys must have SSH or SubjectInfo format"
+                    Console.error(m)
+                    sys.exit()
+        else: # Private key
+            if new_format is None:
+                forma = "PKCS8"
+            else:
+                forma = new_format
+                if forma != "PKCS8" and forma != "OpenSSL":
+                    m = "Private keys must have PKCS8 or OpenSSL format"
+                    Console.error(m)
+                    sys.exit()
+
+        # load {key_type} key at {path} with {old_encoding}
+        k = self.load_key(path = fp, key_type = key_type,
+                          encoding=oenc, ask_pass = ask_pass)
+
+        # searialze key with {new_format} and {new_encoding}
+        k = self.serialize_key(key = k,
+                                key_type = key_type,
+                                encoding = nenc,
+                                format = forma,
+                                ask_pass = ask_pass)
+
+        # write the key to {path}
+        self.write_key(key = k, path = fp, mode = "wb", force = True)
+
     # noinspection PyPep8Naming
-    def requestPass(self, prompt="Password for key:"):
+    def requestPass(self, prompt="Password for key:", confirm = True):
         try:
-            pwd = getpass.getpass(prompt)
-            return pwd
+            pwd1 = getpass.getpass(prompt)
+
+            # Request password input twice to confirm input
+            if confirm:
+                pwd2 = getpass.getpass("Confirm password:")
+                if pwd1 == pwd2:
+                    return pwd1
+                else:
+                    Console.error("Mismatched passwords")
+                    sys.exit()
+            else:
+                return pwd1
+
         except getpass.GetPassWarning:
             Console.error("Danger: password may be echoed")
             sys.exit()
