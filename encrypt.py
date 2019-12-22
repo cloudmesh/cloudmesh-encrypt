@@ -332,8 +332,13 @@ class KeyHandler:
         else:
             raise UnsupportedAlgorithm
 
-    def serialize_key(self, debug=False, key=None, key_type="PRIV",
-                      encoding="PEM", format="PKCS8", ask_pass=True):
+    def serialize_key(self,
+                      debug=False,
+                      key=None,
+                      key_type="PRIV",
+                      encoding="PEM",
+                      format="PKCS8",
+                      ask_pass=True):
         """
         @param: debug:      cloudmesh debug flag
         @param: key:        pyca key object
@@ -389,7 +394,7 @@ class KeyHandler:
                 key_format = key_format.OpenSSH
             else:
                 Console.error("Unsupported public key format")
-                sys.exit()
+                raise ValueError("Unsupported public key format")
 
         # Discern encoding
         encode = None
