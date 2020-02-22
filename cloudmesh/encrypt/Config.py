@@ -13,9 +13,9 @@ from cloudmesh.common.util import readfile
 from cloudmesh.common.util import writefd
 from cloudmesh.configuration.security.encrypt import CmsEncryptor, KeyHandler, \
     CmsHasher
+from cloudmesh.configuration.Config import Config as BaseConfig
 
-
-class EncryptConfig:
+class Config(BaseConfig):
 
     def encrypt(self):
         """
