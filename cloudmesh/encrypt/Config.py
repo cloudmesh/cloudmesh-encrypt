@@ -11,7 +11,7 @@ from cloudmesh.common.console import Console
 from cloudmesh.common.util import path_expand
 from cloudmesh.common.util import readfile
 from cloudmesh.common.util import writefd
-from cloudmesh.configuration.security.encrypt import CmsEncryptor, KeyHandler, \
+from cloudmesh.encrypt.encrypt import CmsEncryptor, KeyHandler, \
     CmsHasher
 from cloudmesh.configuration.Config import Config as BaseConfig
 
